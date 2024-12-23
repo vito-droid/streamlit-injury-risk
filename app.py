@@ -67,7 +67,7 @@ st.title("Prediksi Risiko Cedera Pemain")
 
 # Load dan proses data
 file_path = 'Injuries.xlsx'
-data = pd.read_excel(file_path)
+data = pd.read_excel(file_path, engine='openpyxl')
 
 # Data Cleaning
 data['Days'] = data['Days'].str.replace(' days', '', regex=False).replace(['?', ''], np.nan)
