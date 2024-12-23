@@ -62,7 +62,7 @@ def predict_by_player_name(player_name, model, scaler, data, threshold=0.5):
 st.title("Prediksi Risiko Cedera Pemain")
 
 # Load dan proses data
-file_path = r'C:\22.11.5231\AI lanjut\Injuries.xlsx'
+file_path = r'C:\22.11.5231\AI lanjut\streamlit-injury-risk\Injuries.xlsx'
 data = pd.read_excel(file_path)
 
 # Data Cleaning
