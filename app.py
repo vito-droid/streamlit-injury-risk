@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import time
@@ -24,7 +24,8 @@ def train_model(data, features, target):
     
     # Build and compile LSTM Model
     model = Sequential([
-        LSTM(64, input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=False),
+        Input(shape=(X_train.shape[1], X_train.shape[2])),
+        LSTM(64, return_sequences=False),
         Dropout(0.2),
         Dense(32, activation='relu'),
         Dropout(0.2),
@@ -42,10 +43,12 @@ def predict_by_player_name(player_name, model, scaler, data, threshold=0.5):
     if not player_row.empty:
         days = player_row['Days'].values[0]
         games_missed = player_row['Games missed'].values[0]
-        
-        player_data_scaled = scaler.transform([[days, games_missed]])
+
+        # Pastikan data memiliki nama kolom saat menggunakan MinMaxScaler
+        player_data = pd.DataFrame([[days, games_missed]], columns=['Days', 'Games missed'])
+        player_data_scaled = scaler.transform(player_data)
         player_data_scaled = np.expand_dims(player_data_scaled, axis=1)
-        
+
         risk_score = model.predict(player_data_scaled)[0][0]
         if risk_score > threshold:
             predicted_class = "High Injury Risk"
@@ -53,10 +56,11 @@ def predict_by_player_name(player_name, model, scaler, data, threshold=0.5):
         else:
             predicted_class = "Low Injury Risk"
             recommendation = "Pemain dapat dimainkan, tetapi perhatikan kondisinya."
-        
+
         return predicted_class, risk_score, recommendation
     else:
         return None, None, "Pemain tidak ditemukan"
+
 
 # Streamlit App
 st.title("Prediksi Risiko Cedera Pemain")
@@ -66,10 +70,12 @@ file_path = 'Injuries.xlsx'
 data = pd.read_excel(file_path)
 
 # Data Cleaning
-data['Days'] = data['Days'].str.replace(' days', '', regex=False).replace('?', np.nan).astype(float)
-data['Games missed'] = data['Games missed'].replace(['?', '-'], np.nan).astype(float)
-data['Days'].fillna(data['Days'].median(), inplace=True)
-data['Games missed'].fillna(data['Games missed'].median(), inplace=True)
+data['Days'] = data['Days'].str.replace(' days', '', regex=False).replace(['?', ''], np.nan)
+data['Days'] = pd.to_numeric(data['Days'], errors='coerce')
+data['Games missed'] = data['Games missed'].replace(['?', '-', ''], np.nan)
+data['Games missed'] = pd.to_numeric(data['Games missed'], errors='coerce')
+data['Days'] = data['Days'].fillna(data['Days'].median())
+data['Games missed'] = data['Games missed'].fillna(data['Games missed'].median())
 
 # Create target column 'High Injury Risk'
 data['High Injury Risk'] = ((data['Days'] > 30) | (data['Games missed'] > 5)).astype(int)
@@ -95,21 +101,19 @@ if "prediction_result" not in st.session_state:
 
 # Tombol prediksi
 if st.button("Prediksi"):
-    if player_name:
-        predicted_class, risk_score, recommendation = predict_by_player_name(player_name, model, scaler, data)
-        st.session_state.prediction_result = {
-            "player_name": player_name,
-            "predicted_class": predicted_class,
-            "risk_score": risk_score,
-            "recommendation": recommendation
-        }
+    if player_name.strip():
+        try:
+            predicted_class, risk_score, recommendation = predict_by_player_name(player_name, model, scaler, data)
+            st.session_state.prediction_result = {
+                "player_name": player_name,
+                "predicted_class": predicted_class,
+                "risk_score": risk_score,
+                "recommendation": recommendation
+            }
+        except Exception as e:
+            st.error(f"Terjadi kesalahan: {e}")
     else:
-        st.session_state.prediction_result = {
-            "player_name": None,
-            "predicted_class": None,
-            "risk_score": None,
-            "recommendation": "Masukkan nama pemain untuk memulai prediksi."
-        }
+        st.warning("Masukkan nama pemain untuk memulai prediksi.")
 
 # Tampilkan hasil prediksi jika ada
 if st.session_state.prediction_result:
