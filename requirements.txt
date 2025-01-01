@@ -4,4 +4,3 @@ numpy
 tensorflow
 scikit-learn
 openpyxl
-time
