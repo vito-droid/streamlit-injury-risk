@@ -6,6 +6,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import time
 
 # Fungsi untuk melatih model
@@ -35,7 +36,7 @@ def train_model(data, features, target):
     
     model.fit(X_train, y_train, epochs=1, batch_size=16, validation_data=(X_test, y_test), verbose=1)
     
-    return model, scaler
+    return model, scaler, X_test, y_test
 
 # Fungsi untuk prediksi berdasarkan nama pemain
 def predict_by_player_name(player_name, model, scaler, data, threshold=0.5):
@@ -61,7 +62,6 @@ def predict_by_player_name(player_name, model, scaler, data, threshold=0.5):
     else:
         return None, None, "Pemain tidak ditemukan"
 
-
 # Streamlit App
 st.title("Prediksi Risiko Cedera Pemain")
 
@@ -82,46 +82,40 @@ data['High Injury Risk'] = ((data['Days'] > 30) | (data['Games missed'] > 5)).as
 
 # Latih model dengan caching dan tampilkan pesan dinamis
 status_placeholder = st.empty()  # Placeholder untuk status
-status_placeholder.text("📊 Melatih model, harap tunggu...")  # Pesan saat proses pelatihan
+status_placeholder.text(" Melatih model, harap tunggu...")  # Pesan saat proses pelatihan
 
-model, scaler = train_model(data, ['Days', 'Games missed'], 'High Injury Risk')
+model, scaler, X_test, y_test = train_model(data, ['Days', 'Games missed'], 'High Injury Risk')
 
-status_placeholder.success("✅ Model berhasil dilatih!")  # Ubah pesan setelah selesai
+# Hitung metrik evaluasi
+y_pred = model.predict(X_test)
+y_pred_class = (y_pred > 0.5).astype(int)
+
+# Menghitung metrik evaluasi
+accuracy = accuracy_score(y_test, y_pred_class)
+precision = precision_score(y_test, y_pred_class)
+recall = recall_score(y_test, y_pred_class)
+f1 = f1_score(y_test, y_pred_class)
+
+status_placeholder .success(" Model berhasil dilatih!")  # Ubah pesan setelah selesai
 
 # Tunggu beberapa detik sebelum menghapus pesan
 time.sleep(3)
 status_placeholder.empty()  # Hapus pesan setelah 3 detik
 
-# Input dari pengguna
+# Tampilkan metrik evaluasi
+st.write("Metrik Evaluasi Model:")
+st.write(f"Akurasi: {accuracy:.2f}")
+st.write(f"Precision: {precision:.2f}")
+st.write(f"Recall: {recall:.2f}")
+st.write(f"F1 Score: {f1:.2f}")
+
+# Input untuk prediksi berdasarkan nama pemain
 player_name = st.text_input("Masukkan nama pemain:")
-
-# Gunakan session state untuk melacak tombol prediksi dan hasil
-if "prediction_result" not in st.session_state:
-    st.session_state.prediction_result = None
-
-# Tombol prediksi
-if st.button("Prediksi"):
-    if player_name.strip():
-        try:
-            predicted_class, risk_score, recommendation = predict_by_player_name(player_name, model, scaler, data)
-            st.session_state.prediction_result = {
-                "player_name": player_name,
-                "predicted_class": predicted_class,
-                "risk_score": risk_score,
-                "recommendation": recommendation
-            }
-        except Exception as e:
-            st.error(f"Terjadi kesalahan: {e}")
+if st.button("Prediksi Risiko Cedera"):
+    predicted_class, risk_score, recommendation = predict_by_player_name(player_name, model, scaler, data)
+    if predicted_class:
+        st.write(f"Prediksi Kelas: {predicted_class}")
+        st.write(f"Skor Risiko: {risk_score:.2f}")
+        st.write(f"Rekomendasi: {recommendation}")
     else:
-        st.warning("Masukkan nama pemain untuk memulai prediksi.")
-
-# Tampilkan hasil prediksi jika ada
-if st.session_state.prediction_result:
-    result = st.session_state.prediction_result
-    if result["player_name"]:
-        st.write(f"Nama Pemain: {result['player_name']}")
-        st.write(f"Risk Score: {result['risk_score']:.4f}")
-        st.write(f"Predicted Class: {result['predicted_class']}")
-        st.write(f"Rekomendasi: {result['recommendation']}")
-    else:
-        st.warning(result["recommendation"])
+        st.write(recommendation)
